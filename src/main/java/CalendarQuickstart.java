@@ -24,7 +24,7 @@ import java.util.List;
 public class CalendarQuickstart {
     /** Application name. */
     private static final String APPLICATION_NAME =
-        "Google Calendar API Java Quickstart";
+        "Magister Syncer";
 
     /** Directory to store user credentials for this application. */
     private static final java.io.File DATA_STORE_DIR = new java.io.File(
