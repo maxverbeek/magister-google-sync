@@ -1,7 +1,7 @@
 apply plugin: 'java'
 apply plugin: 'application'
 
-mainClassName = 'CalendarQuickstart'
+mainClassName = 'MagisterGoogleCalendarSyncer'
 sourceCompatibility = 1.7
 targetCompatibility = 1.7
 version = '1.0'
@@ -14,6 +14,10 @@ dependencies {
     compile 'com.google.api-client:google-api-client:1.22.0'
     compile 'com.google.oauth-client:google-oauth-client-jetty:1.22.0'
     compile 'com.google.apis:google-api-services-calendar:v3-rev208-1.22.0'
-		compile(project(':magister-api'))
+	compile(project(':magister-api'))
 
+}
+
+run {
+    standardInput = System.in
 }

@@ -10,18 +10,22 @@ import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
-import com.google.api.client.util.DateTime;
 
 import com.google.api.services.calendar.CalendarScopes;
-import com.google.api.services.calendar.model.*;
+import eu.magisterapp.magisterapi.Afspraak;
+import eu.magisterapp.magisterapi.AfspraakList;
+import eu.magisterapp.magisterapi.MagisterAPI;
+import eu.magisterapp.magisterapi.Utils;
+import org.joda.time.DateTime;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
 
-public class CalendarQuickstart {
+public class MagisterGoogleCalendarSyncer {
     /** Application name. */
     private static final String APPLICATION_NAME =
         "Magister Syncer";
@@ -66,7 +70,7 @@ public class CalendarQuickstart {
     public static Credential authorize() throws IOException {
         // Load client secrets.
         InputStream in =
-            CalendarQuickstart.class.getResourceAsStream("/client_secret.json");
+            MagisterGoogleCalendarSyncer.class.getResourceAsStream("/client_secret.json");
         GoogleClientSecrets clientSecrets =
             GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
 
@@ -102,29 +106,32 @@ public class CalendarQuickstart {
         // Build a new authorized API client service.
         // Note: Do not confuse this class with the
         //   com.google.api.services.calendar.model.Calendar class.
-        com.google.api.services.calendar.Calendar service =
-            getCalendarService();
+        com.google.api.services.calendar.Calendar service = getCalendarService();
 
-        // List the next 10 events from the primary calendar.
-        DateTime now = new DateTime(System.currentTimeMillis());
-        Events events = service.events().list("primary")
-            .setMaxResults(10)
-            .setTimeMin(now)
-            .setOrderBy("startTime")
-            .setSingleEvents(true)
-            .execute();
-        List<Event> items = events.getItems();
-        if (items.size() == 0) {
-            System.out.println("No upcoming events found.");
-        } else {
-            System.out.println("Upcoming events");
-            for (Event event : items) {
-                DateTime start = event.getStart().getDateTime();
-                if (start == null) {
-                    start = event.getStart().getDate();
-                }
-                System.out.printf("%s (%s)\n", event.getSummary(), start);
-            }
+        Scanner input = new Scanner(System.in);
+
+        System.out.println("Vul je school in:");
+        String school = input.nextLine();
+        System.out.println("Vul je gebruikersnaam in:");
+        String username = input.nextLine();
+
+        // Dit geeft een nullpointer als je het in gradle gebruikt:
+        // String password = new String(System.console().readPassword("Vul je wachtwoord in: "));
+
+        System.out.println("Vul je wachtwoord in: ");
+        String password = input.nextLine();
+
+        MagisterAPI api = new MagisterAPI(school, username, password);
+
+        String beginSchooljaar = "2016-9-5";
+
+        DateTime monday = Utils.getStartOfWeek(beginSchooljaar);
+        DateTime friday = Utils.getEndOfWeek(beginSchooljaar);
+
+        AfspraakList afspraken = api.getAfspraken(monday, friday, true);
+
+        for (Afspraak afspraak : afspraken) {
+            System.out.println(afspraak.Start.toString("EEEE, HH:mm"));
         }
     }
 
