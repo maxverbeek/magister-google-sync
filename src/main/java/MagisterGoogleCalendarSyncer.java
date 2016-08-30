@@ -12,6 +12,7 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 
 import com.google.api.services.calendar.CalendarScopes;
+import com.google.api.services.calendar.model.*;
 import eu.magisterapp.magisterapi.Afspraak;
 import eu.magisterapp.magisterapi.AfspraakList;
 import eu.magisterapp.magisterapi.MagisterAPI;
@@ -21,6 +22,7 @@ import org.joda.time.DateTime;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
@@ -50,7 +52,7 @@ public class MagisterGoogleCalendarSyncer {
      * at ~/.credentials/calendar-java-quickstart
      */
     private static final List<String> SCOPES =
-        Arrays.asList(CalendarScopes.CALENDAR_READONLY);
+        Arrays.asList(CalendarScopes.CALENDAR, CalendarScopes.CALENDAR_READONLY);
 
     static {
         try {
@@ -130,9 +132,91 @@ public class MagisterGoogleCalendarSyncer {
 
         AfspraakList afspraken = api.getAfspraken(monday, friday, true);
 
-        for (Afspraak afspraak : afspraken) {
-            System.out.println(afspraak.Start.toString("EEEE, HH:mm"));
+        System.out.println("Geef een naam voor de agenda:");
+        String calendarName = input.nextLine();
+
+        String roosterId = null;
+        // Iterate through entries in calendar list
+        String pageToken = null;
+        do {
+            CalendarList calendarList = service.calendarList().list().setPageToken(pageToken).execute();
+            List<CalendarListEntry> items = calendarList.getItems();
+
+            for (CalendarListEntry calendarListEntry : items) {
+                if (calendarListEntry.getSummary().equals(calendarName)) {
+                    roosterId = calendarListEntry.getId();
+
+                    System.out.println(roosterId);
+
+                    break;
+                }
+            }
+
+            if (roosterId != null) break;
+
+            pageToken = calendarList.getNextPageToken();
+        } while (pageToken != null);
+
+        if (roosterId != null) {
+            System.out.println("Er is al een '" + calendarName + "' agenda. Verwijderen? y/n");
+            String response = input.nextLine();
+
+            if (response.length() > 0 && (response.charAt(0) == 'y' || response.charAt(0) == 'Y')) {
+                service.calendarList().delete(roosterId).execute();
+            }
         }
+
+        System.out.println("Geef de locatie voor de nieuwe agenda:");
+        String location = input.nextLine();
+
+        // Create a new calendar list entry
+        Calendar calendar = new Calendar();
+        calendar.setSummary(calendarName);
+        calendar.setTimeZone("Europe/Amsterdam");
+        if (! location.isEmpty()) calendar.setLocation(location);
+
+        // Insert the new calendar list entry
+        Calendar roosterCalendar = service.calendars().insert(calendar).execute();
+
+        // Zet lessen voor 1 week (herhalend elke week) in de rooster calender.
+
+        for (Afspraak afspraak : afspraken) {
+            Event event = getEventFromAfspraak(afspraak);
+
+            service.events().insert(roosterCalendar.getId(), event).execute();
+        }
+
+        System.out.println("Done.");
+
+    }
+
+    private static Event getEventFromAfspraak(Afspraak afspraak) {
+        Event event = new Event();
+
+        event.setSummary(afspraak.getVak());
+        event.setLocation(afspraak.getLokalen());
+        event.setStart(new EventDateTime()
+                .setDateTime(new com.google.api.client.util.DateTime(afspraak.Start.toDate()))
+                .setTimeZone("Europe/Amsterdam")
+        );
+
+        event.setEnd(new EventDateTime()
+                .setDateTime(new com.google.api.client.util.DateTime(afspraak.Einde.toDate()))
+                .setTimeZone("Europe/Amsterdam")
+        );
+
+        String[] recurrence = new String[] {"RRULE:FREQ=WEEKLY;COUNT=7"}; // TODO: fix aantal keer dat hij er in moet staan (defualt 7)
+        event.setRecurrence(Arrays.asList(recurrence));
+
+        EventReminder[] reminderOverrides = new EventReminder[] {
+                new EventReminder().setMethod("popup").setMinutes(2),
+        };
+        Event.Reminders reminders = new Event.Reminders()
+                .setUseDefault(false)
+                .setOverrides(Arrays.asList(reminderOverrides));
+        event.setReminders(reminders);
+
+        return event;
     }
 
 }
