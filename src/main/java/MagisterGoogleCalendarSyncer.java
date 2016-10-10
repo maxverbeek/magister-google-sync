@@ -13,6 +13,7 @@ import com.google.api.client.util.store.FileDataStoreFactory;
 
 import com.google.api.services.calendar.CalendarScopes;
 import com.google.api.services.calendar.model.*;
+import com.google.api.services.calendar.model.Calendar;
 import eu.magisterapp.magisterapi.Afspraak;
 import eu.magisterapp.magisterapi.AfspraakList;
 import eu.magisterapp.magisterapi.MagisterAPI;
@@ -22,12 +23,12 @@ import org.joda.time.DateTime;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 
 public class MagisterGoogleCalendarSyncer {
+
+    private static final long weekInMs = 1000 * 60 * 60 * 24 * 7;
+
     /** Application name. */
     private static final String APPLICATION_NAME =
         "Magister Syncer";
@@ -127,10 +128,12 @@ public class MagisterGoogleCalendarSyncer {
 
         String beginSchooljaar = "2016-9-5";
 
-        DateTime monday = Utils.getStartOfWeek(beginSchooljaar);
-        DateTime friday = Utils.getEndOfWeek(beginSchooljaar);
+        DateTime start = Utils.getStartOfWeek(beginSchooljaar);
 
-        AfspraakList afspraken = api.getAfspraken(monday, friday, true);
+        System.out.println("Hoeveel weken?");
+        int weken = new Integer(input.nextLine());
+
+        AfspraakList afspraken = api.getAfspraken(start, start.plusWeeks(weken).minusDays(3), true);
 
         System.out.println("Geef een naam voor de agenda:");
         String calendarName = input.nextLine();
@@ -166,31 +169,59 @@ public class MagisterGoogleCalendarSyncer {
             }
         }
 
-        System.out.println("Geef de locatie voor de nieuwe agenda:");
-        String location = input.nextLine();
-
         // Create a new calendar list entry
         Calendar calendar = new Calendar();
         calendar.setSummary(calendarName);
         calendar.setTimeZone("Europe/Amsterdam");
-        if (! location.isEmpty()) calendar.setLocation(location);
+        calendar.setLocation(school);
 
         // Insert the new calendar list entry
         Calendar roosterCalendar = service.calendars().insert(calendar).execute();
 
         // Zet lessen voor 1 week (herhalend elke week) in de rooster calender.
+        List<Afspraak> rawAfspraken = new ArrayList<>();
 
         for (Afspraak afspraak : afspraken) {
-            Event event = getEventFromAfspraak(afspraak);
+            rawAfspraken.add(afspraak);
+        }
+
+        while (rawAfspraken.size() > 0) {
+
+            Iterator<Afspraak> iterator = rawAfspraken.iterator();
+
+            Afspraak afspraak = iterator.next();
+
+            iterator.remove();
+
+            int repeat = 0;
+
+            while (iterator.hasNext()) {
+                Afspraak volgende = iterator.next();
+
+                System.out.println(volgende.getVak() + " " + volgende.getLokalen());
+
+                if (afspraak.Start.plusWeeks(repeat + 1).equals(volgende.Start) && afspraak.Einde.plusWeeks(repeat + 1).equals(volgende.Einde) && Objects.equals(afspraak.getVak(), volgende.getVak()) && Objects.equals(afspraak.getLokalen(), volgende.getLokalen())) {
+                    iterator.remove();
+
+                    repeat++;
+                }
+            }
+
+            Event event = getEventFromAfspraak(afspraak, repeat);
 
             service.events().insert(roosterCalendar.getId(), event).execute();
         }
+
 
         System.out.println("Done.");
 
     }
 
-    private static Event getEventFromAfspraak(Afspraak afspraak) {
+    private static String getStartIdentifier(Afspraak afspraak) {
+        return afspraak.LesuurVan.toString() + "-" + afspraak.LesuurTotMet.toString() + afspraak.getVakken() + afspraak.getLokalen() + afspraak.getDocenten() + afspraak.Start.getMillis() % weekInMs;
+    }
+
+    private static Event getEventFromAfspraak(Afspraak afspraak, int repeat) {
         Event event = new Event();
 
         event.setSummary(afspraak.getVak());
@@ -205,8 +236,8 @@ public class MagisterGoogleCalendarSyncer {
                 .setTimeZone("Europe/Amsterdam")
         );
 
-        String[] recurrence = new String[] {"RRULE:FREQ=WEEKLY;COUNT=7"}; // TODO: fix aantal keer dat hij er in moet staan (defualt 7)
-        event.setRecurrence(Arrays.asList(recurrence));
+        String[] recurrence = new String[] {String.format("RRULE:FREQ=WEEKLY;COUNT=%d", repeat)};
+        if (repeat > 0) event.setRecurrence(Arrays.asList(recurrence));
 
         EventReminder[] reminderOverrides = new EventReminder[] {
                 new EventReminder().setMethod("popup").setMinutes(2),
@@ -217,6 +248,17 @@ public class MagisterGoogleCalendarSyncer {
         event.setReminders(reminders);
 
         return event;
+    }
+
+    private static Map<Long, Afspraak> normalize(AfspraakList afspraken)
+    {
+        Map<Long, Afspraak> msMap = new HashMap<>();
+
+        for (Afspraak afspraak : afspraken) {
+            msMap.put(afspraak.Start.getMillis(), afspraak);
+        }
+
+        return msMap;
     }
 
 }
