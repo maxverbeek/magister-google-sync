@@ -19,6 +19,7 @@ import eu.magisterapp.magisterapi.AfspraakList;
 import eu.magisterapp.magisterapi.MagisterAPI;
 import eu.magisterapp.magisterapi.Utils;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeComparator;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -185,6 +186,15 @@ public class MagisterGoogleCalendarSyncer {
             rawAfspraken.add(afspraak);
         }
 
+        rawAfspraken.sort(new Comparator<Afspraak>() {
+            @Override
+            public int compare(Afspraak o1, Afspraak o2) {
+                if (o1.Start.isAfter(o2.Start)) return 1;
+                if (o2.Start.isAfter(o1.Start)) return -1;
+                return 0;
+            }
+        });
+
         while (rawAfspraken.size() > 0) {
 
             Iterator<Afspraak> iterator = rawAfspraken.iterator();
@@ -193,14 +203,12 @@ public class MagisterGoogleCalendarSyncer {
 
             iterator.remove();
 
-            int repeat = 0;
+            int repeat = 1;
 
             while (iterator.hasNext()) {
                 Afspraak volgende = iterator.next();
 
-                System.out.println(volgende.getVak() + " " + volgende.getLokalen());
-
-                if (afspraak.Start.plusWeeks(repeat + 1).equals(volgende.Start) && afspraak.Einde.plusWeeks(repeat + 1).equals(volgende.Einde) && Objects.equals(afspraak.getVak(), volgende.getVak()) && Objects.equals(afspraak.getLokalen(), volgende.getLokalen())) {
+                if (afspraak.Start.plusWeeks(repeat).equals(volgende.Start) && afspraak.Einde.plusWeeks(repeat).equals(volgende.Einde) && Objects.equals(afspraak.getVak(), volgende.getVak()) && Objects.equals(afspraak.getLokalen(), volgende.getLokalen())) {
                     iterator.remove();
 
                     repeat++;
@@ -237,7 +245,7 @@ public class MagisterGoogleCalendarSyncer {
         );
 
         String[] recurrence = new String[] {String.format("RRULE:FREQ=WEEKLY;COUNT=%d", repeat)};
-        if (repeat > 0) event.setRecurrence(Arrays.asList(recurrence));
+        if (repeat > 1) event.setRecurrence(Arrays.asList(recurrence));
 
         EventReminder[] reminderOverrides = new EventReminder[] {
                 new EventReminder().setMethod("popup").setMinutes(2),
