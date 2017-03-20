@@ -127,9 +127,7 @@ public class MagisterGoogleCalendarSyncer {
 
         MagisterAPI api = new MagisterAPI(school, username, password);
 
-        String beginSchooljaar = "2016-9-5";
-
-        DateTime start = Utils.getStartOfWeek(beginSchooljaar);
+        DateTime start = Utils.getStartOfWeek(Utils.now().toString("Y-M-d"));
 
         System.out.println("Hoeveel weken?");
         int weken = new Integer(input.nextLine());
