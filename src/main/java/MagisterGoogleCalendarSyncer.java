@@ -252,6 +252,12 @@ public class MagisterGoogleCalendarSyncer {
                 .setUseDefault(false)
                 .setOverrides(Arrays.asList(reminderOverrides));
         event.setReminders(reminders);
+        
+        String noHTMLString = "";
+        if (afspraak.Inhoud != null)
+            noHTMLString += afspraak.Inhoud.replaceAll("\\<.*?>", "");
+        event.setDescription(noHTMLString);
+        
 
         return event;
     }
